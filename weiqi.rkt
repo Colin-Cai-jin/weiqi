@@ -46,7 +46,8 @@
 
  ;Print the board
  (define (print)
-  (define for-display (lambda (c) (case c ((0) "+") ((1) "O") (else "X"))))
+  ;(define for-display (lambda (c) (case c ((0) "+") ((1) "O") (else "X"))))
+  (define for-display (lambda (c) (case c ((0) "+") ((1) "\033[41mO\033[0m") (else "\033[44mX\033[0m"))))
   (begin
    (display "\033[3;J\033[H\033[2J\r\n")
    (for-each
@@ -180,22 +181,22 @@
  )
 
  ;A new step
- (define (put-stone)
+ (define (put-stone cursor cood)
   (let*
    (
-    (board2 (list-set2 board (car cursor) (cdr cursor) (if (odd? step) 2 1)))
-    (s (cal-connected board2 (car cursor) (cdr cursor) (cons (make-list y-range (make-list x-range 0)) #f) = (lambda (m n r) (or r (zero? n)))))
+    (board2 (list-set2 board (car cood) (cdr cood) (if (odd? step) 2 1)))
+    (s (cal-connected board2 (car cood) (cdr cood) (cons (make-list y-range (make-list x-range 0)) #f) = (lambda (m n r) (or r (zero? n)))))
     (s2
      (myfold
       (lambda (delt-xy r)
        (if
         (and
-        (in-range? delt-xy (car cursor) (cdr cursor))
-        (= 3 (+ (list-ref2 board2 (car cursor) (cdr cursor)) (list-ref2 board (+ (car delt-xy) (car cursor)) (+ (cdr delt-xy) (cdr cursor)))))
-        (zero? (list-ref2 (car r) (+ (car delt-xy) (car cursor)) (+ (cdr delt-xy) (cdr cursor))))
+        (in-range? delt-xy (car cood) (cdr cood))
+        (= 3 (+ (list-ref2 board2 (car cood) (cdr cood)) (list-ref2 board (+ (car delt-xy) (car cood)) (+ (cdr delt-xy) (cdr cood)))))
+        (zero? (list-ref2 (car r) (+ (car delt-xy) (car cood)) (+ (cdr delt-xy) (cdr cood))))
         )
         (let
-        ((s3 (cal-connected board2 (+ (car delt-xy) (car cursor)) (+ (cdr delt-xy) (cdr cursor)) (cons (make-list y-range (make-list x-range 0)) #f) = (lambda (m n r) (or r (zero? n))))))
+        ((s3 (cal-connected board2 (+ (car delt-xy) (car cood)) (+ (cdr delt-xy) (cdr cood)) (cons (make-list y-range (make-list x-range 0)) #f) = (lambda (m n r) (or r (zero? n))))))
         (if (cdr s3)
          r
          (cons
@@ -221,30 +222,63 @@
   )
  )
 
+ ;Translate string to the pair of numbers
+ ;For example: "10 18" => '(10 . 18) "X11 8 " =>'(11 . 8)
+ (define (string->numberpair s)
+  (define (get-number-string s len)
+   (cond
+    ((zero? len) (cons 0 ""))
+    ((or (char<? (string-ref s 0) #\0) (char>? (string-ref s 0) #\9)) (let ((r (get-number-string (substring s 1 len) (- len 1)))) (cons (+ 1 (car r)) (cdr r))))
+    ((= len 1) (cons 0 s))
+    ((or (char<? (string-ref s 1) #\0) (char>? (string-ref s 1) #\9)) (cons 0 (make-string 1 (string-ref s 0))))
+    (else (cons 0 (string-append (make-string 1 (string-ref s 0)) (cdr (get-number-string (substring s 1 len) (- len 1))))))
+   )
+  )
+  (define gn (lambda (s) (get-number-string s (string-length s))))
+  (let* (
+         (len (string-length s))
+         (a (get-number-string s len))
+         (snd-start (+ (car a) (string-length (cdr a))))
+         (b (get-number-string (substring s snd-start len) (- len snd-start)))
+         )
+   (if (string=? (cdr b) "")
+    #f
+    (cons (string->number (cdr a)) (string->number (cdr b)))
+   )
+  )
+ )
+
  ;Return a pair of the next `recv' argument and the action
  (define (new-input x)
   (define direct-pre? (lambda (p) (or (string=? p "\033[") (string=? p "X\033["))))
   (case x
-   ((#\033 #\[) (cons (string-append recv (make-string 1 x)) '()))
+   ((#\033 #\[ #\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9 #\space) (cons (string-append recv (make-string 1 x)) '()))
    ((#\A) (cons (cut-recv) (if (or (not (direct-pre? recv)) (zero? (cdr cursor))) '() '(0 . -1))))
    ((#\B) (cons (cut-recv) (if (or (not (direct-pre? recv)) (= (- y-range 1) (cdr cursor))) '() '(0 . 1))))
    ((#\C) (cons (cut-recv) (if (or (not (direct-pre? recv)) (= (- x-range 1) (car cursor))) '() '(1 . 0))))
    ((#\D) (cons (cut-recv) (if (or (not (direct-pre? recv)) (zero? (car cursor))) '() '( -1 . 0))))
    ((#\return)
-    (cons (cut-recv)
-     (cond
-      ((or (< (car cursor) 0) (< (cdr cursor) 0)) '())
-      ((and (string=? recv "") (zero? (list-ref2 board (car cursor) (cdr cursor)))) 'P)
-      ((string=? recv "X")
-       (let ((c (list-ref2 board (car cursor) (cdr cursor))))
+    (let* (
+           (new-recv (cut-recv))
+           (cood (string->numberpair recv))
+           (x-r (if cood (car cood) (car cursor)))
+           (y-r (if cood (cdr cood) (cdr cursor)))
+        )
+     (cons new-recv
+      (cond
+       ((and (not cood) (or (< (car cursor) 0) (< (cdr cursor) 0))) '())
+       ((and (string=? new-recv "") (zero? (list-ref2 board x-r y-r))) (if cood (cons 'P cood) 'P))
+       ((string=? new-recv "X")
+        (let ((c (list-ref2 board x-r y-r)))
         (cond
-         ((= c 1) 'C1)
-         ((= c 2) 'C2)
+         ((= c 1) (if cood (cons 'C1 cood) 'C1))
+         ((= c 2) (if cood (cons 'C2 cood) 'C2))
          (else '())
+         )
         )
        )
+       (else '())
       )
-      (else '())
      )
     )
    )
@@ -258,12 +292,23 @@
  (define (play s)
   (cond
    ((pair? (cdr s))
-    (play-go #t x-range y-range board (car s)
-     (if (or (< (car cursor) 0) (< (cdr cursor) 0))
-      '(0 . 0)
-      (cons (+ (car cursor) (cadr s)) (+ (cdr cursor) (cddr s)))
+    (cond
+     ((number? (cadr s))
+      (play-go #t x-range y-range board (car s)
+       (if (or (< (car cursor) 0) (< (cdr cursor) 0))
+        '(0 . 0)
+        (cons (+ (car cursor) (cadr s)) (+ (cdr cursor) (cddr s)))
+       )
+       step dead-black dead-white last-two-board
+      )
      )
-     step dead-black dead-white last-two-board
+     ((member (cadr s) '(C1 C2))
+      (let
+       ((q (cal-connected board (caddr s) (cdddr s) (cons (make-list y-range (make-list x-range 0)) #f) (lambda (m n) (or (= n (if (eq? (cadr s) 'C1) 1 2)) (= n 0))) (lambda l #t))))
+       (play-go #t x-range y-range (map (lambda (b-line flag-line) (map (lambda (b flag) (if (zero? flag) b 0)) b-line flag-line)) board (car q))(car s) '(-1 . -1) step 0 0 '())
+      )
+     )
+     ((eq? (cadr s) 'P) (put-stone '(-1 . -1) (cddr s)))
     )
    )
    ((eq? (cdr s) 'X) (play-go #t x-range y-range board (car s) cursor step dead-black dead-white last-two-board))
@@ -273,7 +318,7 @@
      (play-go #t x-range y-range (map (lambda (b-line flag-line) (map (lambda (b flag) (if (zero? flag) b 0)) b-line flag-line)) board (car q))(car s) cursor step 0 0 '())
     )
    )
-   ((eq? (cdr s) 'P) (put-stone))
+   ((eq? (cdr s) 'P) (put-stone cursor cursor))
    ((eq? (cdr s) 'Z)
     (let ((stones (count-stones board)))
      (display (string-append "result:\tblack:" (number->string (exact->inexact (car stones))) "\twhite:" (number->string (exact->inexact (cdr stones))) "\r\n"))
