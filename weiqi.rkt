@@ -23,19 +23,26 @@
  )
 
  ;The fold high-order function
- (define myfold
+ (define my-fold-right
   (lambda (op init lst)
    (if (null? lst)
     init
-    (op (car lst) (myfold op init (cdr lst)))
+    (op (car lst) (my-fold-right op init (cdr lst)))
    )
   )
  )
 
+ ;Return a new list which's position of index `x' is replaced to `value'
+ (define (my-list-set lst index value)
+  (if (zero? index)
+   (cons value (cdr lst))
+   (cons (car lst) (my-list-set (cdr lst) (- index 1) value))
+  )
+ )
  ;`m' is a matrix
  ;Return the new matrix(set m[x,y] to `v')
  (define (list-set2 m x y v)
-  (list-set m y (list-set (list-ref m y) x v))
+  (my-list-set m y (my-list-set (list-ref m y) x v))
  )
 
  ;`m' is a matrix
@@ -46,17 +53,17 @@
 
  ;Print the board
  (define (print)
-  ;(define for-display (lambda (c) (case c ((0) "+") ((1) "O") (else "X"))))
-  (define for-display (lambda (c) (case c ((0) "+") ((1) "\033[41mO\033[0m") (else "\033[44mX\033[0m"))))
+  (define display-char (lambda (c) (case c ((0) "+") ((1) "O") (else "X"))))
+  (define display-char-color (lambda (c) (case c ((0) "+") ((1) "\033[41mO\033[0m") (else "\033[44mX\033[0m"))))
   (begin
    (display "\033[3;J\033[H\033[2J\r\n")
    (for-each
     (lambda (n)
-     (map
+     (for-each
       (lambda (m)
        (if (and (= n (cdr cursor)) (= m (car cursor)))
-        (display (string-append (if (zero? m) "    " "-") "\033[42m" (for-display (list-ref2 board m n)) "\033[0m" ))
-        (display (string-append (if (zero? m) "    " "-") (for-display (list-ref2 board m n))))
+        (display (string-append (if (zero? m) "    " "-") "\033[42m" (display-char (list-ref2 board m n)) "\033[0m" ))
+        (display (string-append (if (zero? m) "    " "-") (display-char-color (list-ref2 board m n))))
        )
       )
       (myrange x-range)
@@ -91,7 +98,7 @@
  ;reulst => (flag-tab . init_neighbor)
  ;f-neighbor (3 arguments) : color1 color2 acc
  (define (cal-connected board x y result connect? f-neighbor)
-  (myfold
+  (my-fold-right
    (lambda (delt-xy r)
     (if (and
          (in-range? delt-xy x y)
@@ -104,7 +111,7 @@
    )
    (cons
     (list-set2 (car result) x y 1)
-    (myfold
+    (my-fold-right
      (lambda (delt-xy r)
       (if (in-range? delt-xy x y)
        (f-neighbor
@@ -187,7 +194,7 @@
     (board2 (list-set2 board (car cood) (cdr cood) (if (odd? step) 2 1)))
     (s (cal-connected board2 (car cood) (cdr cood) (cons (make-list y-range (make-list x-range 0)) #f) = (lambda (m n r) (or r (zero? n)))))
     (s2
-     (myfold
+     (my-fold-right
       (lambda (delt-xy r)
        (if
         (and
