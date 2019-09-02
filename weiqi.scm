@@ -1,5 +1,3 @@
-#lang scheme
-
 ;bprint: print the board or not
 ;x-range: the range of `x'
 ;y-range: the range of `y'
@@ -10,46 +8,6 @@
 ;dead-white: the number of the dead white stones
 ;last-two-board: the pair of the last two boards
 (define (play-go bprint x-range y-range board recv cursor step dead-black dead-white last-two-board)
-
- ;Return a list which is from 0 to n-1
- (define (myrange n)
-  (define (myrange2 a b)
-   (if (>= a b)
-    '()
-    (cons a (myrange2 (+ a 1) b))
-   )
-  )
-  (myrange2 0 n)
- )
-
- ;The fold high-order function
- (define my-fold-right
-  (lambda (op init lst)
-   (if (null? lst)
-    init
-    (op (car lst) (my-fold-right op init (cdr lst)))
-   )
-  )
- )
-
- ;Return a new list which's position of index `x' is replaced to `value'
- (define (my-list-set lst index value)
-  (if (zero? index)
-   (cons value (cdr lst))
-   (cons (car lst) (my-list-set (cdr lst) (- index 1) value))
-  )
- )
- ;`m' is a matrix
- ;Return the new matrix(set m[x,y] to `v')
- (define (list-set2 m x y v)
-  (my-list-set m y (my-list-set (list-ref m y) x v))
- )
-
- ;`m' is a matrix
- ;Return m[x,y]
- (define (list-ref2 m x y)
-  (list-ref (list-ref m y) x)
- )
 
  ;Print the board
  (define (print)
@@ -62,8 +20,8 @@
      (for-each
       (lambda (m)
        (if (and (= n (cdr cursor)) (= m (car cursor)))
-        (display (string-append (if (zero? m) "    " "-") "\033[42m" (display-char (list-ref2 board m n)) "\033[0m" ))
-        (display (string-append (if (zero? m) "    " "-") (display-char-color (list-ref2 board m n))))
+        (display (string-append (if (zero? m) "    " "-") "\033[42m" (display-char (list-ref-2d board m n)) "\033[0m" ))
+        (display (string-append (if (zero? m) "    " "-") (display-char-color (list-ref-2d board m n))))
        )
       )
       (myrange x-range)
@@ -102,21 +60,21 @@
    (lambda (delt-xy r)
     (if (and
          (in-range? delt-xy x y)
-         (connect? (list-ref2 board x y) (list-ref2 board (+ x (car delt-xy)) (+ y (cdr delt-xy))))
-         (zero? (list-ref2 (car r) (+ x (car delt-xy)) (+ y (cdr delt-xy))))
+         (connect? (list-ref-2d board x y) (list-ref-2d board (+ x (car delt-xy)) (+ y (cdr delt-xy))))
+         (zero? (list-ref-2d (car r) (+ x (car delt-xy)) (+ y (cdr delt-xy))))
         )
      (cal-connected board (+ x (car delt-xy)) (+ y (cdr delt-xy)) r connect? f-neighbor)
      r
     )
    )
    (cons
-    (list-set2 (car result) x y 1)
+    (list-set-2d (car result) x y 1)
     (my-fold-right
      (lambda (delt-xy r)
       (if (in-range? delt-xy x y)
        (f-neighbor
-         (list-ref2 board x y)
-         (list-ref2 board (+ x (car delt-xy)) (+ y (cdr delt-xy)))
+         (list-ref-2d board x y)
+         (list-ref-2d board (+ x (car delt-xy)) (+ y (cdr delt-xy)))
          r
        )
        r
@@ -133,7 +91,7 @@
  (define (cut-recv)
   (cond
    ((zero? (string-length recv)) "")
-   ((eq? (string-ref recv 0) #\X) (substring recv 0 1))
+   ((eq? (string-ref recv 0) #\1) (substring recv 0 1))
    (else "")
   )
  )
@@ -191,7 +149,7 @@
  (define (put-stone cursor cood)
   (let*
    (
-    (board2 (list-set2 board (car cood) (cdr cood) (if (odd? step) 2 1)))
+    (board2 (list-set-2d board (car cood) (cdr cood) (if (odd? step) 2 1)))
     (s (cal-connected board2 (car cood) (cdr cood) (cons (make-list y-range (make-list x-range 0)) #f) = (lambda (m n r) (or r (zero? n)))))
     (s2
      (my-fold-right
@@ -199,8 +157,8 @@
        (if
         (and
         (in-range? delt-xy (car cood) (cdr cood))
-        (= 3 (+ (list-ref2 board2 (car cood) (cdr cood)) (list-ref2 board (+ (car delt-xy) (car cood)) (+ (cdr delt-xy) (cdr cood)))))
-        (zero? (list-ref2 (car r) (+ (car delt-xy) (car cood)) (+ (cdr delt-xy) (cdr cood))))
+        (= 3 (+ (list-ref-2d board2 (car cood) (cdr cood)) (list-ref-2d board (+ (car delt-xy) (car cood)) (+ (cdr delt-xy) (cdr cood)))))
+        (zero? (list-ref-2d (car r) (+ (car delt-xy) (car cood)) (+ (cdr delt-xy) (cdr cood))))
         )
         (let
         ((s3 (cal-connected board2 (+ (car delt-xy) (car cood)) (+ (cdr delt-xy) (cdr cood)) (cons (make-list y-range (make-list x-range 0)) #f) = (lambda (m n r) (or r (zero? n))))))
@@ -229,41 +187,14 @@
   )
  )
 
- ;Translate string to the pair of numbers
- ;For example: "10 18" => '(10 . 18) "X11 8 " =>'(11 . 8)
- (define (string->numberpair s)
-  (define (get-number-string s len)
-   (cond
-    ((zero? len) (cons 0 ""))
-    ((or (char<? (string-ref s 0) #\0) (char>? (string-ref s 0) #\9)) (let ((r (get-number-string (substring s 1 len) (- len 1)))) (cons (+ 1 (car r)) (cdr r))))
-    ((= len 1) (cons 0 s))
-    ((or (char<? (string-ref s 1) #\0) (char>? (string-ref s 1) #\9)) (cons 0 (make-string 1 (string-ref s 0))))
-    (else (cons 0 (string-append (make-string 1 (string-ref s 0)) (cdr (get-number-string (substring s 1 len) (- len 1))))))
-   )
-  )
-  (define gn (lambda (s) (get-number-string s (string-length s))))
-  (let* (
-         (len (string-length s))
-         (a (get-number-string s len))
-         (snd-start (+ (car a) (string-length (cdr a))))
-         (b (get-number-string (substring s snd-start len) (- len snd-start)))
-         )
-   (if (string=? (cdr b) "")
-    #f
-    (cons (string->number (cdr a)) (string->number (cdr b)))
-   )
-  )
- )
-
  ;Return a pair of the next `recv' argument and the action
  (define (new-input x)
-  (define direct-pre? (lambda (p) (or (string=? p "\033[") (string=? p "X\033["))))
+  ;(define direct-pre? (lambda (p) (or (string=? p "\033[") (string=? p "X\033["))))
   (case x
-   ((#\033 #\[ #\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9 #\space) (cons (string-append recv (make-string 1 x)) '()))
-   ((#\A) (cons (cut-recv) (if (or (not (direct-pre? recv)) (zero? (cdr cursor))) '() '(0 . -1))))
-   ((#\B) (cons (cut-recv) (if (or (not (direct-pre? recv)) (= (- y-range 1) (cdr cursor))) '() '(0 . 1))))
-   ((#\C) (cons (cut-recv) (if (or (not (direct-pre? recv)) (= (- x-range 1) (car cursor))) '() '(1 . 0))))
-   ((#\D) (cons (cut-recv) (if (or (not (direct-pre? recv)) (zero? (car cursor))) '() '( -1 . 0))))
+   ((#\w) (cons (cut-recv) (if (zero? (cdr cursor)) '() '(0 . -1))))
+   ((#\s) (cons (cut-recv) (if (= (- y-range 1) (cdr cursor)) '() '(0 . 1))))
+   ((#\d) (cons (cut-recv) (if (= (- x-range 1) (car cursor)) '() '(1 . 0))))
+   ((#\a) (cons (cut-recv) (if (zero? (car cursor)) '() '( -1 . 0))))
    ((#\return)
     (let* (
            (new-recv (cut-recv))
@@ -274,9 +205,9 @@
      (cons new-recv
       (cond
        ((and (not cood) (or (< (car cursor) 0) (< (cdr cursor) 0))) '())
-       ((and (string=? new-recv "") (zero? (list-ref2 board x-r y-r))) (if cood (cons 'P cood) 'P))
-       ((string=? new-recv "X")
-        (let ((c (list-ref2 board x-r y-r)))
+       ((and (string=? new-recv "") (zero? (list-ref-2d board x-r y-r))) (if cood (cons 'P cood) 'P))
+       ((string=? new-recv "1")
+        (let ((c (list-ref-2d board x-r y-r)))
         (cond
          ((= c 1) (if cood (cons 'C1 cood) 'C1))
          ((= c 2) (if cood (cons 'C2 cood) 'C2))
@@ -289,8 +220,8 @@
      )
     )
    )
-   ((#\X) (if (zero? step) (cons "" '()) (cons "X" 'X)))
-   ((#\Z) (cons (cut-recv) (if (and (> (string-length recv) 0) (eq? (string-ref recv 0) #\X)) 'Z '())))
+   ((#\1) (if (zero? step) (cons "" '()) (cons "1" 'X)))
+   ((#\2) (cons (cut-recv) (if (and (> (string-length recv) 0) (eq? (string-ref recv 0) #\1)) 'Z '())))
    (else (cons (cut-recv) '()))
   )
  )

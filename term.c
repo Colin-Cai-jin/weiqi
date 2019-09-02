@@ -15,6 +15,17 @@ void do_exit(void)
         tcsetattr(STDIN_FILENO, TCSANOW, &t_old);
 }
 
+void deal_signal(int sig)
+{
+	switch(sig) {
+		case SIGPIPE:
+			do_exit();
+			break;
+		default:
+			break;
+	}
+}
+
 int main()
 {
         char c;
@@ -23,7 +34,7 @@ int main()
         struct sigaction sa;
         struct pollfd pf[2];
 
-        sa.sa_handler = SIG_IGN;
+        sa.sa_handler = deal_signal;
         sa.sa_flags = 0;
         sigemptyset(&sa.sa_mask);
         sigaction(SIGPIPE, &sa, NULL);
