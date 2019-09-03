@@ -191,6 +191,18 @@
  (define (new-input x)
   ;(define direct-pre? (lambda (p) (or (string=? p "\033[") (string=? p "X\033["))))
   (case x
+   ((#\A #\B #\C #\D #\E #\F #\G #\H #\I #\J #\K #\L #\M #\N #\O #\P #\Q #\R #\S)
+    (if (and (> (string-length recv) 0) ((lambda (x) (and (char>=? x #\A) (char<=? x #\S))) (string-ref recv (- (string-length recv) 1))))
+     (cons
+      (cut-recv)
+      (cons
+       (- (char->integer (string-ref recv (- (string-length recv) 1))) (char->integer #\A) (car cursor))
+       (- (char->integer x) (char->integer #\A) (cdr cursor))
+      )
+     )
+     (cons (string-append recv (make-string 1 x)) '())
+    )
+   )
    ((#\w) (cons (cut-recv) (if (zero? (cdr cursor)) '() '(0 . -1))))
    ((#\s) (cons (cut-recv) (if (= (- y-range 1) (cdr cursor)) '() '(0 . 1))))
    ((#\d) (cons (cut-recv) (if (= (- x-range 1) (car cursor)) '() '(1 . 0))))
@@ -233,9 +245,11 @@
     (cond
      ((number? (cadr s))
       (play-go #t x-range y-range board (car s)
-       (if (or (< (car cursor) 0) (< (cdr cursor) 0))
-        '(0 . 0)
-        (cons (+ (car cursor) (cadr s)) (+ (cdr cursor) (cddr s)))
+       (let ((new-x (+ (car cursor) (cadr s))) (new-y (+ (cdr cursor) (cddr s))))
+        (if (or (< new-x 0) (< new-y 0))
+         '(0 . 0)
+         (cons new-x new-y)
+        )
        )
        step dead-black dead-white last-two-board
       )
