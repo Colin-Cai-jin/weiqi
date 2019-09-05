@@ -41,7 +41,7 @@
      "\twhite:"
      (number->string dead-white)
      "\033[?25l\r\n"
-     (if (and (> (string-length recv) 0) (eq? (string-ref recv 0) #\X))
+     (if (and (> (string-length recv) 0) (char=? (string-ref recv 0) #\X))
       "Leaves the dead stones\r\n"
       ""
      )
@@ -91,7 +91,7 @@
  (define (cut-recv)
   (cond
    ((zero? (string-length recv)) "")
-   ((eq? (string-ref recv 0) #\1) (substring recv 0 1))
+   ((char=? (string-ref recv 0) #\1) (substring recv 0 1))
    (else "")
   )
  )
@@ -191,7 +191,7 @@
  (define (new-input x)
   ;(define direct-pre? (lambda (p) (or (string=? p "\033[") (string=? p "X\033["))))
   (case x
-   ((#\b) (cons (cut-recv) (if (string=? recv "") 'B '()))) ;B for back
+   ((#\b) (cons "" 'B )) ;B for back
    ((#\A #\B #\C #\D #\E #\F #\G #\H #\I #\J #\K #\L #\M #\N #\O #\P #\Q #\R #\S)
     (if (and (> (string-length recv) 0) ((lambda (x) (and (char>=? x #\A) (char<=? x #\S))) (string-ref recv (- (string-length recv) 1))))
      (cons
@@ -233,8 +233,8 @@
      )
     )
    )
-   ((#\1) (if (zero? step) (cons "" '()) (cons "1" 'X)))
-   ((#\2) (cons (cut-recv) (if (and (> (string-length recv) 0) (eq? (string-ref recv 0) #\1)) 'Z '())))
+   ((#\1) (if (or (zero? step) (and (> (string-length recv) 0) (char=? (string-ref recv 0) #\1))) (cons (cut-recv) '()) (cons "1" 'X)))
+   ((#\2) (cons (cut-recv) (if (and (> (string-length recv) 0) (char=? (string-ref recv 0) #\1)) 'Z '())))
    (else (cons (cut-recv) '()))
   )
  )
@@ -270,7 +270,7 @@
      (play-go #t x-range y-range (cddar manual) (car s) cursor (- step 1) (caaar manual) (cdaar manual) (cdr manual))
     )
    )
-   ((eq? (cdr s) 'X) (play-go #t x-range y-range board (car s) cursor step dead-black dead-white manual))
+   ((eq? (cdr s) 'X) (play-go #t x-range y-range board (car s) cursor step dead-black dead-white (cons (cons (cons dead-black dead-white) (cons cursor board)) manual)))
    ((or (eq? (cdr s) 'C1) (eq? (cdr s) 'C2))
     (let
      ((q (cal-connected board (car cursor) (cdr cursor) (cons (make-list y-range (make-list x-range 0)) #f) (lambda (m n) (or (= n (if (eq? (cdr s) 'C1) 1 2)) (= n 0))) (lambda l #t))))
@@ -310,6 +310,6 @@
   0
   0
   0
-  '() ;'(((3 . 3) . #f) ((3 . 2) . #f) ((7 . 8) . #f) ((3 . 4) . #f) ((7 . 2) . #f) ((1 . 3) . #f)  ((7 . 9) . #f) ((4 . 3) . #t))
+  '()
  )
 )
