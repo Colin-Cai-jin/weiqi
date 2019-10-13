@@ -75,6 +75,27 @@
 
  (define in-range? (lambda (delt-xy x y) (and (<= 0 (+ x (car delt-xy)) (- x-range 1)) (<= 0 (+ y (cdr delt-xy)) (- y-range 1)))))
 
+ (define (cmp board next-board) 
+  (my-fold-right
+   (lambda (xy r)
+    (let (
+      (old (list-ref-2d board (car xy) (cdr xy)))
+      (new (list-ref-2d next-board (car xy) (cdr xy)))
+     )
+     (if (< old new)
+      (cons (list xy) (cdr r))
+      (if (< new old)
+       (cons (car r) (cons xy (cdr r)))
+       r
+      )
+     )
+    )
+   )
+   '(())
+   (apply append (map (lambda (y) (map (lambda (x) (cons x y)) (myrange x-range))) (myrange y-range)))
+  )
+ )
+
  ;A high-order function which can traverse the connected area including [x,y] and the Qi(a term of weiqi) by your own rule and returns a pair
  ;reulst => (flag-tab . init_neighbor)
  ;f-neighbor (3 arguments) : color1 color2 acc
@@ -170,25 +191,25 @@
  )
 
  ;A new step
- (define (put-stone cursor cood)
+ (define (put-stone cursor xy)
   (let*
    (
-    (board2 (list-set-2d board (car cood) (cdr cood) (if (odd? step) 2 1)))
+    (board2 (list-set-2d board (car xy) (cdr xy) (if (odd? step) 2 1)))
     (nb (lambda (m n r) (or r (zero? n))))
-    (s (cal-connected board2 (car cood) (cdr cood) (cons (make-list y-range (make-list x-range 0)) #f) = nb))
+    (s (cal-connected board2 (car xy) (cdr xy) (cons (make-list y-range (make-list x-range 0)) #f) = nb))
     (s2
      (my-fold-right
       (lambda (delt-xy r)
        (if
         (and
-         (in-range? delt-xy (car cood) (cdr cood))
-         (= 3 (+ (list-ref-2d board2 (car cood) (cdr cood)) (list-ref-2d board (+ (car delt-xy) (car cood)) (+ (cdr delt-xy) (cdr cood)))))
-         (zero? (list-ref-2d (car r) (+ (car delt-xy) (car cood)) (+ (cdr delt-xy) (cdr cood))))
+         (in-range? delt-xy (car xy) (cdr xy))
+         (= 3 (+ (list-ref-2d board2 (car xy) (cdr xy)) (list-ref-2d board (+ (car delt-xy) (car xy)) (+ (cdr delt-xy) (cdr xy)))))
+         (zero? (list-ref-2d (car r) (+ (car delt-xy) (car xy)) (+ (cdr delt-xy) (cdr xy))))
         )
         (let*
          (
 	  (nb (lambda (m n r) (or r (zero? n))))
-	  (s3 (cal-connected board2 (+ (car delt-xy) (car cood)) (+ (cdr delt-xy) (cdr cood)) (cons (make-list y-range (make-list x-range 0)) #f) = nb))
+	  (s3 (cal-connected board2 (+ (car delt-xy) (car xy)) (+ (cdr delt-xy) (cdr xy)) (cons (make-list y-range (make-list x-range 0)) #f) = nb))
 	 )
          (if (cdr s3)
           r
@@ -208,15 +229,15 @@
     (s2-cnt (apply + (map (lambda (m) (apply + m)) (car s2))))
     (next-board (map (lambda (b-line flag-line) (map (lambda (b flag) (if (zero? flag) b 0)) b-line flag-line)) board2 (car s2)))
    )
-   (if (and (not (cdr s))(or (zero? s2-cnt) (equal? next-board (cddar manual))))
+   (if (and (not (cdr s))(or (zero? s2-cnt) (equal? (cmp board next-board) ((lambda (x) (cons (cdr x) (car x))) (car manual)))))
     (pmask #f '(1) (cut-recv))
     (let
      (
      (next-dead-black (if (odd? step) (+ dead-black s2-cnt) dead-black))
      (next-dead-white (if (odd? step) dead-white (+ dead-white s2-cnt)))
-     (next-manual (cons (cons (cons dead-black dead-white) (cons cursor board)) manual))
+     (next-manual (cons (cmp board next-board) manual))
      )
-    (pmask #t '(0 1 3 4 5 6) next-board (cut-recv) (+ step 1) next-dead-black next-dead-white next-manual )
+    (pmask #t '(0 1 3 4 5 6) next-board (cut-recv) (+ step 1) next-dead-black next-dead-white next-manual)
     )
    )
   )
@@ -224,7 +245,6 @@
 
  ;Return a pair of the next `recv' argument and the action
  (define (new-input x)
-  ;(define direct-pre? (lambda (p) (or (string=? p "\033[") (string=? p "X\033["))))
   (case x
    ((#\b) (cons "" 'B )) ;B for back
    ((#\A #\B #\C #\D #\E #\F #\G #\H #\I #\J #\K #\L #\M #\N #\O #\P #\Q #\R #\S)
@@ -246,19 +266,19 @@
    ((#\return #\newline)
     (let* (
            (new-recv (cut-recv))
-           (cood (string->numberpair recv))
-           (x-r (if cood (car cood) (car cursor)))
-           (y-r (if cood (cdr cood) (cdr cursor)))
+           (xy (string->numberpair recv))
+           (x-r (if xy (car xy) (car cursor)))
+           (y-r (if xy (cdr xy) (cdr cursor)))
         )
      (cons new-recv
       (cond
-       ((and (not cood) (or (< (car cursor) 0) (< (cdr cursor) 0))) '())
-       ((and (string=? new-recv "") (zero? (list-ref-2d board x-r y-r))) (if cood (cons 'P cood) 'P))
+       ((and (not xy) (or (< (car cursor) 0) (< (cdr cursor) 0))) '())
+       ((and (string=? new-recv "") (zero? (list-ref-2d board x-r y-r))) (if xy (cons 'P xy) 'P))
        ((string=? new-recv "1")
         (let ((c (list-ref-2d board x-r y-r)))
         (cond
-         ((= c 1) (if cood (cons 'C1 cood) 'C1))
-         ((= c 2) (if cood (cons 'C2 cood) 'C2))
+         ((= c 1) (if xy (cons 'C1 xy) 'C1))
+         ((= c 2) (if xy (cons 'C2 xy) 'C2))
          (else '())
          )
         )
@@ -306,10 +326,38 @@
    ((eq? (cdr s) 'B)
     (if (zero? step)
      (pmask #f '(1) (car s))
-     (playgo #t (cddar manual) (car s) cursor (- step 1) (caaar manual) (cdaar manual) (cdr manual))
+     (let*
+      (
+       (clr_stone (clr_stone?))
+       (next-manual (if clr_stone manual (cdr manual)))
+       (next-step (if clr_stone step (- step 1)))
+       (stat
+        (my-fold-right
+	 (lambda (s r)
+	  (
+	   cons
+	   (list-set-2d
+	    (my-fold-right (lambda (xy b) (list-set-2d b (car xy) (cdr xy) 0)) (car r) (cdr s))
+	    (caaar s)
+	    (cdaar s)
+	    (cadddr r)
+	   )
+	   (if (= 1 (cadddr r))
+	    (list (cadr r) (+ (caddr r) (length (cdr s))) 2 (caar s))
+	    (list (+ (cadr r) (length (cdr s))) (caddr r) 1 (caar s))
+	   )
+	  )
+	 )
+	 (cons (make-list y-range (make-list x-range 0)) '(0 0 1 (-1 . -1)))
+	 next-manual
+        )
+       )
+      )
+      (playgo #t (car stat) (car s) (car (cddddr stat)) next-step (cadr stat) (caddr stat) next-manual)
+     )
     )
    )
-   ((eq? (cdr s) 'X) (pmask #t '(1 6) (car s) (cons (cons (cons dead-black dead-white) (cons cursor board)) manual)))
+   ((eq? (cdr s) 'X) (pmask #t '(1 6) (car s) manual))
    ((or (eq? (cdr s) 'C1) (eq? (cdr s) 'C2))
     (let*
      (
