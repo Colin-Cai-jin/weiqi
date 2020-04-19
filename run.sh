@@ -39,7 +39,7 @@ elif [ x"$1" = x'Chez' ]; then
 			echo ')'
 		} >func.ss
 	fi
-	./input | scheme -q --script weiqi.ss
+	./input | scheme --optimize-level 3 -q --script weiqi.ss
 else
 	echo $0 '[Racket|Chez]'
 fi
